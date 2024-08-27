@@ -240,6 +240,8 @@ export default class ElectronAppWrapper {
 			}
 		});
 
+
+
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Old code before rule was applied
 		this.win_.on('close', (event: any) => {
 			// If it's on macOS, the app is completely closed only if the user chooses to close the app (willQuitApp_ will be true)
@@ -441,6 +443,7 @@ export default class ElectronAppWrapper {
 		if (!gotTheLock) {
 			// Another instance is already running - exit
 			this.quit();
+			this.window().show();
 			return true;
 		}
 
@@ -448,7 +451,9 @@ export default class ElectronAppWrapper {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Old code before rule was applied
 		this.electronApp_.on('second-instance', (_e: any, argv: string[]) => {
 			const win = this.window();
+			if (!win.isVisible()) win.show();
 			if (!win) return;
+
 			if (win.isMinimized()) win.restore();
 			win.show();
 			// eslint-disable-next-line no-restricted-properties
@@ -504,6 +509,7 @@ export default class ElectronAppWrapper {
 		});
 
 		this.electronApp_.on('activate', () => {
+			this.bringToFront(this.win_);
 			this.win_.show();
 		});
 
@@ -512,6 +518,15 @@ export default class ElectronAppWrapper {
 			event.preventDefault();
 			void this.openCallbackUrl(url);
 		});
+	}
+
+	public bringToFront(window: BrowserWindow) {
+		if (!window) return;
+		if (window.isMinimized()) {
+			window.restore();
+		}
+		window.show();
+		window.moveTop();
 	}
 
 	public async openCallbackUrl(url: string) {

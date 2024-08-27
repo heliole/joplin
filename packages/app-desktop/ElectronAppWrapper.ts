@@ -142,8 +142,9 @@ export default class ElectronAppWrapper {
 			y: windowState.y,
 			width: windowState.width,
 			height: windowState.height,
-			minWidth: 100,
+			minWidth: 400,
 			minHeight: 100,
+			title: 'My Custom App Name',
 			backgroundColor: '#fff', // required to enable sub pixel rendering, can't be in css
 			webPreferences: {
 				nodeIntegration: true,

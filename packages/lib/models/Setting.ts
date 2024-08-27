@@ -204,7 +204,7 @@ class Setting extends BaseModel {
 	public static constants_: Constants = {
 		env: Env.Undefined,
 		isDemo: false,
-		appName: 'joplinXDD',
+		appName: 'joplin_alone',
 		appId: 'SET_ME', // Each app should set this identifier
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Old code before rule was applied
 		appType: 'SET_ME' as any, // 'cli' or 'mobile'

@@ -33,7 +33,7 @@ class NoteWidget extends TextWidget {
 	}
 
 	welcomeText() {
-		return _('Welcome to Our Very Much Own Super Exciting Joplin!\n\nType `:help shortcuts` for the list of keyboard shortcuts, or just `:help` for usage information.\n\nFor example, to create a notebook press `mb`; to create a note press `mn`.');
+		return _('Welcome to Our Joplin!\n\nType `:help shortcuts` for the list of keyboard shortcuts, or just `:help` for usage information.\n\nFor example, to create a notebook press `mb`; to create a note press `mn`.');
 	}
 
 	reloadNote() {

@@ -3,7 +3,6 @@ import { PluginMessage } from './services/plugins/PluginRunner';
 import AutoUpdaterService, { defaultUpdateInterval, initialUpdateStartup } from './services/autoUpdater/AutoUpdaterService';
 import type ShimType from '@joplin/lib/shim';
 const shim: typeof ShimType = require('@joplin/lib/shim').default;
-import { isCallbackUrl } from '@joplin/lib/callbackUrlUtils';
 
 import { BrowserWindow, Tray, screen } from 'electron';
 import bridge from './bridge';
@@ -26,6 +25,7 @@ interface PluginWindows {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Old code before rule was applied
 	[key: string]: any;
 }
+
 
 export default class ElectronAppWrapper {
 
@@ -143,9 +143,8 @@ export default class ElectronAppWrapper {
 			y: windowState.y,
 			width: windowState.width,
 			height: windowState.height,
-			minWidth: 400,
+			minWidth: 100,
 			minHeight: 100,
-			title: 'My Custom App Name',
 			backgroundColor: '#fff', // required to enable sub pixel rendering, can't be in css
 			webPreferences: {
 				nodeIntegration: true,
@@ -447,32 +446,32 @@ export default class ElectronAppWrapper {
 		const gotTheLock = this.electronApp_.requestSingleInstanceLock();
 
 		if (!gotTheLock) {
-			// Another instance is already running - exit
+		// Another instance is already running - exit
 			this.quit();
-			this.window().show();
 			return true;
 		}
-
-		// Someone tried to open a second instance - focus our window instead
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Old code before rule was applied
-		this.electronApp_.on('second-instance', (_e: any, argv: string[]) => {
-			const win = this.window();
-			if (!win.isVisible()) win.show();
-			if (!win) return;
-
-			if (win.isMinimized()) win.restore();
-			win.show();
-			// eslint-disable-next-line no-restricted-properties
-			win.focus();
-			if (process.platform !== 'darwin') {
-				const url = argv.find((arg) => isCallbackUrl(arg));
-				if (url) {
-					void this.openCallbackUrl(url);
-				}
-			}
-		});
-
 		return false;
+		// // Someone tried to open a second instance - focus our window instead
+		// // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Old code before rule was applied
+		// this.electronApp_.on('second-instance', (_e: unknown, argv: string[]) => {
+		// 	const win = this.window();
+
+		// 	if (!win) return;
+
+		// 	if (win.isMinimized()) win.restore();
+		// 	this.window().show();
+		// 	eslint-disable-next-line no-restricted-properties
+		// 	win.focus();
+		// 	if (process.platform !== 'darwin') {
+		// 		const url = argv.find((arg) => isCallbackUrl(arg));
+		// 		if (url) {
+		// 			void this.openCallbackUrl(url);
+		// 		}
+		// 	}
+		// }
+		// );
+
+		// return  > 1;
 	}
 
 	public initializeCustomProtocolHandler(logger: LoggerWrapper) {
@@ -517,8 +516,6 @@ export default class ElectronAppWrapper {
 		const alreadyRunning = this.ensureSingleInstance();
 		if (alreadyRunning) return;
 
-		this.createWindow();
-
 		this.electronApp_.on('before-quit', () => {
 			this.willQuitApp_ = true;
 		});
@@ -528,8 +525,10 @@ export default class ElectronAppWrapper {
 		});
 
 		this.electronApp_.on('activate', () => {
-			this.bringToFront(this.win_);
-			this.win_.show();
+			if (!this.win_) {
+				this.createWindow();
+			} else {	this.window().show(); }
+
 		});
 
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Old code before rule was applied
@@ -539,14 +538,7 @@ export default class ElectronAppWrapper {
 		});
 	}
 
-	public bringToFront(window: BrowserWindow) {
-		if (!window) return;
-		if (window.isMinimized()) {
-			window.restore();
-		}
-		window.show();
-		window.moveTop();
-	}
+
 
 	public async openCallbackUrl(url: string) {
 		this.win_.webContents.send('asynchronous-message', 'openCallbackUrl', {

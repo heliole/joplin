@@ -18,7 +18,7 @@ test.describe('richTextEditor', () => {
 		await editor.attachFileButton.click();
 
 		// Wait to render
-		const viewerFrame = editor.getNoteViewerIframe();
+		const viewerFrame = editor.getNoteViewerFrameLocator();
 		await viewerFrame.locator('a[data-from-md]').waitFor();
 
 		// Should have an attached resource
@@ -38,7 +38,7 @@ test.describe('richTextEditor', () => {
 		await editor.richTextEditor.waitFor();
 
 		// Edit the note to cause the original content to update
-		await editor.getTinyMCEFrameLocator().locator('a').click();
+		await editor.getRichTextFrameLocator().locator('a').click();
 		await mainWindow.keyboard.type('Test...');
 
 		await editor.toggleEditorsButton.click();
@@ -70,7 +70,7 @@ test.describe('richTextEditor', () => {
 
 		// Click on the attached file URL
 		const openPathResult = waitForNextOpenPath(electronApp);
-		const targetLink = editor.getTinyMCEFrameLocator().getByRole('link', { name: basename(pathToAttach) });
+		const targetLink = editor.getRichTextFrameLocator().getByRole('link', { name: basename(pathToAttach) });
 		if (process.platform === 'darwin') {
 			await targetLink.click({ modifiers: ['Meta'] });
 		} else {
@@ -118,6 +118,30 @@ test.describe('richTextEditor', () => {
 		await expect(editor.toggleEditorsButton).not.toBeDisabled();
 		await editor.toggleEditorsButton.click();
 		await expect(editor.codeMirrorEditor).toHaveText('This is a        test.        Test! Another:        !');
+	});
+
+	test('should be possible to navigate between the note title and rich text editor with enter/down/up keys', async ({ mainWindow }) => {
+		const mainScreen = new MainScreen(mainWindow);
+		await mainScreen.createNewNote('Testing keyboard navigation!');
+
+		const editor = mainScreen.noteEditor;
+		await editor.toggleEditorsButton.click();
+
+		await editor.richTextEditor.waitFor();
+
+		await editor.noteTitleInput.click();
+		await expect(editor.noteTitleInput).toBeFocused();
+
+		await mainWindow.keyboard.press('End');
+		await mainWindow.keyboard.press('ArrowDown');
+		await expect(editor.richTextEditor).toBeFocused();
+
+		await mainWindow.keyboard.press('ArrowUp');
+		await expect(editor.noteTitleInput).toBeFocused();
+
+		await mainWindow.keyboard.press('Enter');
+		await expect(editor.noteTitleInput).not.toBeFocused();
+		await expect(editor.richTextEditor).toBeFocused();
 	});
 });
 

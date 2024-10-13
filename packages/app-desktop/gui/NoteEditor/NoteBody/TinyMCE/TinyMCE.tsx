@@ -39,6 +39,7 @@ const { clipboard } = require('electron');
 const supportedLocales = require('./supportedLocales');
 import { hasProtocol } from '@joplin/utils/url';
 import useTabIndenter from './utils/useTabIndenter';
+import useKeyboardRefocusHandler from './utils/useKeyboardRefocusHandler';
 
 const logger = Logger.create('TinyMCE');
 
@@ -130,6 +131,7 @@ const TinyMCE = (props: NoteBodyEditorProps, ref: any) => {
 	usePluginServiceRegistration(ref);
 	useContextMenu(editor, props.plugins, props.dispatch, props.htmlToMarkdown, props.markupToHtml);
 	useTabIndenter(editor);
+	useKeyboardRefocusHandler(editor);
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Old code before rule was applied
 	const dispatchDidUpdate = (editor: any) => {
@@ -218,6 +220,13 @@ const TinyMCE = (props: NoteBodyEditorProps, ref: any) => {
 					editor.insertContent(result.html);
 				} else if (cmd.name === 'editor.focus') {
 					focus('TinyMCE::editor.focus', editor);
+					if (cmd.value?.moveCursorToStart) {
+						editor.selection.placeCaretAt(0, 0);
+						editor.selection.setCursorLocation(
+							editor.dom.root,
+							0,
+						);
+					}
 				} else if (cmd.name === 'editor.execCommand') {
 					if (!('ui' in cmd.value)) cmd.value.ui = false;
 					if (!('value' in cmd.value)) cmd.value.value = null;
@@ -400,6 +409,20 @@ const TinyMCE = (props: NoteBodyEditorProps, ref: any) => {
 			.tox .tox-dialog__body-content,
 			.tox .tox-collection__item {
 				color: ${theme.color};
+			}
+
+			.tox .tox-dialog__body-nav-item {
+				color: ${theme.color};
+			}
+
+			.tox .tox-dialog__body-nav-item[aria-selected=true] {
+				color: ${theme.color3};
+				border-color: ${theme.color3};
+				background-color: ${theme.backgroundColor3};
+			}
+
+			.tox .tox-checkbox__icons .tox-checkbox-icon__unchecked svg {
+				fill: ${theme.color};
 			}
 
 			.tox .tox-collection--list .tox-collection__item--active {
@@ -646,7 +669,6 @@ const TinyMCE = (props: NoteBodyEditorProps, ref: any) => {
 				// Handle the first table row as table header.
 				// https://www.tiny.cloud/docs/plugins/table/#table_header_type
 				table_header_type: 'sectionCells',
-				table_resize_bars: false,
 				language_url: ['en_US', 'en_GB'].includes(language) ? undefined : `${bridge().vendorDir()}/lib/tinymce/langs/${language}`,
 				toolbar: toolbar.join(' '),
 				localization_function: _,

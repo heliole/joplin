@@ -6,7 +6,7 @@ import UndoRedoService from '@joplin/lib/services/UndoRedoService';
 import NoteBodyViewer from '../NoteBodyViewer/NoteBodyViewer';
 import checkPermissions from '../../utils/checkPermissions';
 import NoteEditor from '../NoteEditor/NoteEditor';
-const React = require('react');
+import * as React from 'react';
 import { Keyboard, View, TextInput, StyleSheet, Linking, Share, NativeSyntheticEvent } from 'react-native';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { connect } from 'react-redux';
@@ -17,7 +17,7 @@ import Resource from '@joplin/lib/models/Resource';
 import Folder from '@joplin/lib/models/Folder';
 const Clipboard = require('@react-native-clipboard/clipboard').default;
 const md5 = require('md5');
-const { BackButtonService } = require('../../services/back-button.js');
+import BackButtonService from '../../services/BackButtonService';
 import NavService, { OnNavigateCallback as OnNavigateCallback } from '@joplin/lib/services/NavService';
 import { ModelType } from '@joplin/lib/BaseModel';
 import FloatingActionButton from '../buttons/FloatingActionButton';
@@ -26,7 +26,7 @@ import * as mimeUtils from '@joplin/lib/mime-utils';
 import ScreenHeader, { MenuOptionType } from '../ScreenHeader';
 import NoteTagsDialog from './NoteTagsDialog';
 import time from '@joplin/lib/time';
-const { Checkbox } = require('../checkbox.js');
+import Checkbox from '../Checkbox';
 import { _, currentLocale } from '@joplin/lib/locale';
 import { reg } from '@joplin/lib/registry';
 import ResourceFetcher from '@joplin/lib/services/ResourceFetcher';
@@ -493,11 +493,6 @@ class NoteScreenComponent extends BaseScreenComponent<Props, State> implements B
 		this.undoRedoService_ = new UndoRedoService();
 		this.undoRedoService_.on('stackChange', this.undoRedoService_stackChange);
 
-		if (this.state.note && this.state.note.body && Setting.value('sync.resourceDownloadMode') === 'auto') {
-			const resourceIds = await Note.linkedResourceIds(this.state.note.body);
-			await ResourceFetcher.instance().markForDownload(resourceIds);
-		}
-
 		// Although it is async, we don't wait for the answer so that if permission
 		// has already been granted, it doesn't slow down opening the note. If it hasn't
 		// been granted, the popup will open anyway.
@@ -509,8 +504,12 @@ class NoteScreenComponent extends BaseScreenComponent<Props, State> implements B
 		void ResourceFetcher.instance().markForDownload(event.resourceId);
 	}
 
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Old code before rule was applied
-	public componentDidUpdate(prevProps: any, prevState: any) {
+	public async markAllAttachedResourcesForDownload() {
+		const resourceIds = await Note.linkedResourceIds(this.state.note.body);
+		await ResourceFetcher.instance().markForDownload(resourceIds);
+	}
+
+	public componentDidUpdate(prevProps: Props, prevState: State) {
 		if (this.doFocusUpdate_) {
 			this.doFocusUpdate_ = false;
 			this.scheduleFocusUpdate();
@@ -528,6 +527,11 @@ class NoteScreenComponent extends BaseScreenComponent<Props, State> implements B
 			void promptRestoreAutosave((drawingData: string) => {
 				void this.attachNewDrawing(drawingData);
 			});
+
+			// Handle automatic resource downloading
+			if (this.state.note?.body && Setting.value('sync.resourceDownloadMode') === 'auto') {
+				void this.markAllAttachedResourcesForDownload();
+			}
 		}
 
 		// Disable opening/closing the side menu with touch gestures
@@ -625,21 +629,6 @@ class NoteScreenComponent extends BaseScreenComponent<Props, State> implements B
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Old code before rule was applied
 	public async saveOneProperty(name: string, value: any) {
 		await shared.saveOneProperty(this, name, value);
-	}
-
-	private async deleteNote_onPress() {
-		const note = this.state.note;
-		if (!note.id) return;
-
-		const folderId = note.parent_id;
-
-		await Note.delete(note.id, { toTrash: true, sourceDescription: 'Delete note button' });
-
-		this.props.dispatch({
-			type: 'NAV_GO',
-			routeName: 'Notes',
-			folderId: folderId,
-		});
 	}
 
 	private async pickDocuments() {
@@ -787,7 +776,7 @@ class NoteScreenComponent extends BaseScreenComponent<Props, State> implements B
 				if (this.editorRef.current) {
 					this.editorRef.current.insertText(newText);
 				} else {
-					logger.error(`Tried to attach resource ${resource.id} to the note when the editor is not visible!`);
+					logger.info(`Tried to attach resource ${resource.id} to the note when the editor is not visible -- updating the note body instead.`);
 				}
 			}
 		} else {
@@ -900,20 +889,12 @@ class NoteScreenComponent extends BaseScreenComponent<Props, State> implements B
 	};
 
 	private drawPicture_onPress = async () => {
-		if (this.state.mode === 'edit') {
-			// Create a new empty drawing and attach it now, before the image editor is opened.
-			// With the present structure of Note.tsx, the we can't use this.editorRef while
-			// the image editor is open, and thus can't attach drawings at the cursor location.
-			const resource = await this.attachNewDrawing('');
-			await this.editDrawing(resource);
-		} else {
-			logger.info('Showing image editor...');
-			this.setState({
-				showImageEditor: true,
-				imageEditorResourceFilepath: null,
-				imageEditorResource: null,
-			});
-		}
+		logger.info('Showing image editor...');
+		this.setState({
+			showImageEditor: true,
+			imageEditorResourceFilepath: null,
+			imageEditorResource: null,
+		});
 	};
 
 	private async editDrawing(item: BaseItem) {
@@ -1291,30 +1272,33 @@ class NoteScreenComponent extends BaseScreenComponent<Props, State> implements B
 			});
 		}
 
-		output.push({
-			title: _('Delete'),
-			onPress: () => {
-				void this.deleteNote_onPress();
-			},
-			disabled: readOnly,
-		});
+		const commandService = CommandService.instance();
+		const whenContext = commandService.currentWhenClauseContext();
+		const addButtonFromCommand = (commandName: string, title?: string) => {
+			if (commandName === '-') {
+				output.push({ isDivider: true });
+			} else {
+				output.push({
+					title: title ?? commandService.description(commandName),
+					onPress: async () => {
+						void commandService.execute(commandName);
+					},
+					disabled: !commandService.isEnabled(commandName, whenContext),
+				});
+			}
+		};
+
+		if (whenContext.inTrash) {
+			addButtonFromCommand('permanentlyDeleteNote');
+		} else {
+			addButtonFromCommand('deleteNote', _('Delete'));
+		}
 
 		if (pluginCommands.length) {
 			output.push({ isDivider: true });
 
-			const commandService = CommandService.instance();
 			for (const commandName of pluginCommands) {
-				if (commandName === '-') {
-					output.push({ isDivider: true });
-				} else {
-					output.push({
-						title: commandService.description(commandName),
-						onPress: async () => {
-							void commandService.execute(commandName);
-						},
-						disabled: !commandService.isEnabled(commandName),
-					});
-				}
+				addButtonFromCommand(commandName);
 			}
 		}
 
